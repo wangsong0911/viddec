@@ -116,7 +116,7 @@ static void* video_recv_thread(struct informations * information)
 	unsigned int value = 1;
 	rtp_header_t rtp_header;
 
-	if (p_rtp == NULL) {
+	if(p_rtp == NULL) {
 		return NULL;
 	}
 
@@ -768,20 +768,19 @@ static struct decoder *decoder_open(int argc, char **argv, struct decoder *decod
 		if (!decoder)
 			return NULL;
 
-		MSG("%p: Opening Display..", decoder);
+		MSG("%p: Opening Display...\n", decoder);
 		decoder->disp = disp_open(argc, argv);
 
 		width = 1280;
 		height = 800;
 		/* calculate output buffer parameters: */
-		width  = ALIGN2 (width, 4);        /* round up to macroblocks */
-		height = ALIGN2 (height, 4);       /* round up to macroblocks */
+		width  = ALIGN2(width, 4);        //round up to macroblocks
+		height = ALIGN2(height, 4);       //round up to macroblocks
 
-		padded_width  = ALIGN2 (width + (2*PADX), 7);
-		padded_height = height + 4*PADY;
+		padded_width = ALIGN2(width+(2*PADX), 7);
+		padded_height = height+4*PADY;
 
-
-		decoder->num_outBuf   = MIN(16, 32768 / ((width/16) * (height/16))) + 3;
+		decoder->num_outBuf = MIN(16, 32768/((width/16)*(height/16)))+3;
 		decoder->padded_width = padded_width;
 		decoder->padded_height = padded_height;
 		MSG("%p: padded_width=%d, padded_height=%d, num_buffers=%d",
@@ -794,29 +793,26 @@ static struct decoder *decoder_open(int argc, char **argv, struct decoder *decod
 			goto fail;
 		}
 		decoder->framebuf = disp_get_fb(decoder->disp);
-		if (! disp_get_vid_buffers(decoder->disp, decoder->num_outBuf,
-					FOURCC_STR("NV12"), decoder->padded_width, decoder->padded_height)) {
+		if(!disp_get_vid_buffers(decoder->disp, decoder->num_outBuf, 
+				FOURCC_STR("NV12"), decoder->padded_width, decoder->padded_height)) {
 			ERROR("%p: could not allocate buffers", decoder);
 			goto fail;
 		}
-		if(inloop) inloop = 2; /*Don't bother about looping if not asked to*/
+		if(inloop)
+			inloop = 2; /*Don't bother about looping if not asked to*/
 	}
 
-	if (!decoder->disp->multiplanar) {
-		decoder->uv_offset = padded_width * padded_height;
+	if(!decoder->disp->multiplanar) {
+		decoder->uv_offset = padded_width*padded_height;
 		decoder->outBuf_fd = malloc(sizeof(int)*decoder->num_outBuf);
 		MSG("%p: uv_offset=%d", decoder, decoder->uv_offset);
-	}
-	else{
+	}else {
 		decoder->outBuf_fd = malloc(sizeof(int)*(decoder->num_outBuf*2));
 	}
 
 	decoder->input_sz = width * height;
-	decoder->input_bo = omap_bo_new(decoder->disp->dev,
-			decoder->input_sz, OMAP_BO_WC);
+	decoder->input_bo = omap_bo_new(decoder->disp->dev, decoder->input_sz, OMAP_BO_WC);
 	decoder->input = omap_bo_map(decoder->input_bo);
-
-
 
 	MSG("%p: Opening Engine..", decoder);
 	decoder->engine = Engine_open("ivahd_vidsvr", NULL, &ec);
@@ -847,13 +843,10 @@ static struct decoder *decoder_open(int argc, char **argv, struct decoder *decod
 	decoder->params->numOutputDataUnits = 0;
 	decoder->params->errorInfoMode    = IVIDEO_ERRORINFO_OFF;
 
-
-	MSG("decoder->params->maxWidth = %d  decoder->params->maxHeight = %d ", decoder->params->maxWidth, decoder->params->maxHeight);
-
+	MSG("decoder->params->maxWidth = %d, decoder->params->maxHeight = %d./n", decoder->params->maxWidth, decoder->params->maxHeight);
 
 	decoder->codec = VIDDEC3_create(decoder->engine,
 			"ivahd_h264dec", decoder->params);
-
 
 	if (!decoder->codec) {
 		ERROR("%p: could not create codec", decoder);
@@ -862,7 +855,6 @@ static struct decoder *decoder_open(int argc, char **argv, struct decoder *decod
 
 	decoder->dynParams = dce_alloc(sizeof(IVIDDEC3_DynamicParams));
 	decoder->dynParams->size = sizeof(IVIDDEC3_DynamicParams);
-
 	decoder->dynParams->decodeHeader  = XDM_DECODE_AU;
 
 	/*Not Supported: Set default*/
@@ -873,17 +865,15 @@ static struct decoder *decoder_open(int argc, char **argv, struct decoder *decod
 	decoder->status = dce_alloc(sizeof(IVIDDEC3_Status));
 	decoder->status->size = sizeof(IVIDDEC3_Status);
 
-	err = VIDDEC3_control(decoder->codec, XDM_SETPARAMS,
-			decoder->dynParams, decoder->status);
+	err = VIDDEC3_control(decoder->codec, XDM_SETPARAMS, decoder->dynParams, decoder->status);
 	if (err) {
 		ERROR("%p: fail: %d", decoder, err);
 		goto fail;
 	}
 
 	/* not entirely sure why we need to call this here.. just copying omx.. */
-	err = VIDDEC3_control(decoder->codec, XDM_GETBUFINFO,
-			decoder->dynParams, decoder->status);
-	if (err) {
+	err = VIDDEC3_control(decoder->codec, XDM_GETBUFINFO, decoder->dynParams, decoder->status);
+	if(err) {
 		ERROR("%p: fail: %d", decoder, err);
 		goto fail;
 	}
@@ -906,17 +896,15 @@ static struct decoder *decoder_open(int argc, char **argv, struct decoder *decod
 	decoder->outArgs = dce_alloc(sizeof(IVIDDEC3_OutArgs));
 	decoder->outArgs->size = sizeof(IVIDDEC3_OutArgs);
 
-
 	decoder->tdisp = mark(NULL);
 	return decoder;
 
 fail:
 	if(inloop) inloop = 1; /*Error case: delete everything*/
-	if (decoder)
+	if(decoder)
 		decoder_close(decoder);
 	return NULL;
 }
-
 
 static struct information *information_init(int i)
 {
@@ -966,25 +954,23 @@ static struct information *information_init(int i)
 
 int main(int argc, char **argv)
 {
-	int i, first = 0, ndecoders = 0;
+	int i, first=0, ndecoders=0;
 
 	struct informations *information[4] = {};
 
 	rtp_s input;
 	char ip[40] = "255.255.255.255";
 
-	MSG("%d argc = %d  \n", __LINE__, argc);
+	MSG("line=%d, argc=%d.\n", __LINE__, argc);
 
 	ndecoders = 4;
 	for(i=0; i<ndecoders; i++) {
-		printf("%d \n", __LINE__);
+		//printf("%d \n", __LINE__);
 		information[i] = information_init(i);
-
+		
 		decoder_open(argc, &argv[first], &(information[i]->decoders));
-
-		threadCreate(video_recv_thread, information[i]);  // read rtp
-
-		threadCreate(decode_stream, information[i]);    //decoders
+		threadCreate(video_recv_thread, information[i]);	// read rtp
+		threadCreate(decode_stream, information[i]);		//decoders
 	}
 	while(1) {
 		sleep(10);
