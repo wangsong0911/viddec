@@ -39,6 +39,7 @@ static int add_frame(rtp_s* p_rtp, uint8_t* p_frame, uint32_t i_size, uint32_t i
 static int clear_frame(rtp_s* p_rtp);
 static int dump_frame(uint8_t* p_frame, uint32_t size);
 
+#define NDECODERS	4;
 
 /* Padding for width as per Codec Requirement (for h264) */
 #define PADX  32
@@ -60,9 +61,8 @@ int right = 3;
 
 #define FRONT_IP		"192.168.1.10"
 #define BEHIND_IP		"192.168.1.11"
-#define LEFT_IP		"192.168.1.12"	
+#define LEFT_IP			"192.168.1.12"	
 #define RIGHT_IP      	"192.168.1.13"
-
 
 struct decoder {
 	struct display *disp;
@@ -88,7 +88,6 @@ struct decoder {
 	size_t *outBuf_fd;
 	suseconds_t tdisp;
 };
-
 
 struct informations {
 	struct  _rtp_s rtp;
@@ -147,23 +146,23 @@ static void* video_recv_thread(struct informations * information)
 		}
 		memset(p_recv_buf, 0, sizeof(p_recv_buf));
 		i_recv_size = recv(sock, p_recv_buf, sizeof (p_recv_buf), 0);
-		//printf("cyj  %d p_rtp.i_port = %d\n",__LINE__,p_rtp->i_port);
+		//printf("%d p_rtp.i_port = %d.\n", __LINE__, p_rtp->i_port);
 		if(i_recv_size > 0) {
 			i_time_out = 0;
-			get_rtp_header(&rtp_header, p_recv_buf, i_recv_size);  //rtp header
+			get_rtp_header(&rtp_header, p_recv_buf, i_recv_size);			//rtp header
 
-			if(0x60 == rtp_header.i_pt) {// VIDEO
+			if(0x60 == rtp_header.i_pt) {									//video
 				p_rtp->i_video_time = rtp_header.i_timestamp; 
 				int i_size = RtpTo264(p_recv_buf, i_recv_size, p_save_buf, &p_rtp->i_nalu_ok_flag, &p_rtp->i_last_pkt_num);
 				if(0 == p_rtp->i_video_time_stamp) {
-					p_rtp->i_video_time_stamp = rtp_header.i_timestamp;   // rtp timestamp
+					p_rtp->i_video_time_stamp = rtp_header.i_timestamp;		//rtp timestamp
 					p_rtp->i_video_frame_index = 0;
 				}
 
 				if(p_rtp->i_video_time_stamp != rtp_header.i_timestamp) {
 					if(p_rtp->i_video_frame_index > 0) {
 						if(-1 == p_rtp->i_nalu_ok_flag) {
-							printf("%d \n", __LINE__);
+							//printf("%d \n", __LINE__);
 							p_rtp->i_nalu_ok_flag = 0;
 						}else {
 							add_frame(p_rtp, p_rtp->p_video_frame, p_rtp->i_video_frame_index, 1, p_rtp->i_video_time, rtp_header.i_ssrc >> 24);
@@ -180,7 +179,7 @@ static void* video_recv_thread(struct informations * information)
 			}
 		}else {
 			i_time_out += 500;
-			if (i_time_out > 5000) {
+			if(i_time_out > 5000) {
 				printf("rtp no data recv\n");
 				i_time_out = 0;
 			}
@@ -195,12 +194,9 @@ int get_rtp_header(rtp_header_t* p_header, uint8_t* p_buf, uint32_t i_size)
 {
 	int i_ret = 0;
 
-	if (p_header == NULL || p_buf == NULL || i_size < 0)
-	{
+	if (p_header == NULL || p_buf == NULL || i_size < 0) {
 		i_ret = -1;
-	}
-	else
-	{
+	}else {
 		p_header->i_version = (p_buf[0] & 0xC0) >> 6;
 		p_header->i_extend = (p_buf[0] & 0x10) >> 4;
 		p_header->i_cc = (p_buf[0] & 0x0F);
@@ -224,7 +220,7 @@ int get_rtp_header(rtp_header_t* p_header, uint8_t* p_buf, uint32_t i_size)
 	return i_ret;
 }
 
-//buffer:接收到的数据；recv_bytes数据长度
+/*buffer:接收到的数据；recv_bytes数据长度*/
 //int RtpTo264(unsigned char* buffer, int recv_bytes, unsigned char* save_buffer, int* pnNALUOkFlag, int* pnLastPkt)
 int RtpTo264(unsigned char* buffer, int recv_bytes, char* save_buffer, uint32_t* pnNALUOkFlag, uint32_t* pnLastPkt)
 {
@@ -234,27 +230,26 @@ int RtpTo264(unsigned char* buffer, int recv_bytes, char* save_buffer, uint32_t*
 	nPkt = (unsigned int) (((buffer[2]) << 8) | (buffer[3]));
 
 	if(recv_bytes < 13) {
-		printf("%d recv_bytes < 13 \n",__LINE__);
+		printf("%d recv_bytes<13.\n",__LINE__);
 		*pnNALUOkFlag = -1;
 		return -1;
 	}
 
 	if(nPkt - (*pnLastPkt) > 1) {
-		printf("rtp lose packet, nPkt = %u, last = %u\n", nPkt, *pnLastPkt);//掉包。
+		printf("rtp lose packet, nPkt = %u, last = %u\n", nPkt, *pnLastPkt);	//掉包。
 		*pnNALUOkFlag = -1;
 	}
 	if(nPkt < (*pnLastPkt)) {
-		//跳变
-		printf("rtp lose packet 2\n");
+		printf("rtp lose packet 2\n");		//跳变
 	}
 	(*pnLastPkt) = nPkt;
-	FU_FLAG = (buffer[12])&(0x1F); //第13个字节和0x1F相与
+	FU_FLAG = (buffer[12])&(0x1F);			//第13个字节和0x1F相与
 
 	memset(save_buffer, 0, sizeof (save_buffer));
-	memcpy(&(save_buffer[0]), &(buffer[12]), recv_bytes-12); //第13字节是此NALU的头，14字节及以后是NALU的内容，一起保存
-	save_len = recv_bytes-12; //减12字节的RTP头
-	//*pnNALUOkFlag = 0; //一个NALU就是一包，下面再来的包就是下一个NALU的了
-	return save_len; //save_buffer里面要保存多少字节的数据
+	memcpy(&(save_buffer[0]), &(buffer[12]), recv_bytes-12);	//第13字节是此NALU的头，14字节及以后是NALU的内容，一起保存
+	save_len = recv_bytes-12;			//减12字节的RTP头
+	//*pnNALUOkFlag = 0;				//一个NALU就是一包，下面再来的包就是下一个NALU的了
+	return save_len;					//save_buffer里面要保存多少字节的数据
 }
 
 int write_output(char *y, char *uv,struct informations * information)
@@ -266,35 +261,26 @@ int write_output(char *y, char *uv,struct informations * information)
 	int stride = 1408;
 
 	rtp_s* p_rtp = (rtp_s*) &(information->rtp);
-	if (p_rtp == NULL)
-	{
+	if(p_rtp == NULL) {
 		printf("ERROR!\n");
 		return;
 	}
 
-	if(p_rtp->i_port == FRONT_PORT)
-	{
+	if(p_rtp->i_port == FRONT_PORT) {
 		fd = open("front.yuv", O_WRONLY | O_CREAT | O_APPEND, 0644);
-	}
-	else if(p_rtp->i_port == BEHIND_PORT)
-	{		
+	}else if(p_rtp->i_port == BEHIND_PORT) {		
 		fd = open("behind.yuv", O_WRONLY | O_CREAT | O_APPEND, 0644);
-	}
-	else if(p_rtp->i_port == LEFT_PORT)
-	{
+	}else if(p_rtp->i_port == LEFT_PORT) {
 		fd = open("left.yuv", O_WRONLY | O_CREAT | O_APPEND, 0644);
-	}
-	else if(p_rtp->i_port == RIGHT_PORT)
-	{
+ 	}else if(p_rtp->i_port == RIGHT_PORT) {
 		fd = open("right.yuv", O_WRONLY | O_CREAT | O_APPEND, 0644);
 	}
 
-
-	for( i = 0; i < orig_height; i++ ) {
+	for(i=0; i<orig_height; i++ ) {
 		char   *p = y;
 		int     len = orig_width;
 
-		while( len && ((n = write(fd, p, len)) > 0)) {
+		while(len && ((n = write(fd, p, len)) > 0)) {
 			sz  += n;
 			p   += n;
 			len -= n;
@@ -327,10 +313,7 @@ int write_output(char *y, char *uv,struct informations * information)
 	}
 }
 
-
-
-	static int
-decoder_process(struct informations * information, uint32_t i_frame_size, uint8_t* p_frame)
+static int decoder_process(struct informations * information, uint32_t i_frame_size, uint8_t* p_frame)
 {
 	struct decoder* decoder = (struct decoder*) &(information->decoders);
 
@@ -577,8 +560,8 @@ static void* decode_stream(struct informations * information)
 		//fileHandler = fopen("right.h264", "wb");
 		printf("open right.h264 \n");
 	}
-	shmid= shmget(key, imageSize.height*1.5*imageSize.width+sizeof(int), IPC_CREAT);
-	space= (SHARED_BUF_T *)shmat(shmid, NULL, 0);
+	shmid = shmget(key, imageSize.height*1.5*imageSize.width+sizeof(int), IPC_CREAT);
+	space = (SHARED_BUF_T *)shmat(shmid, NULL, 0);
 	while(1) {
 		pthread_mutex_lock(&p_rtp->mutex);
 		pthread_cond_wait(&p_rtp->cond, &p_rtp->mutex);
@@ -643,38 +626,28 @@ static int clear_frame(rtp_s* p_rtp)
 	return 0;
 }
 
-
 static int add_frame(rtp_s* p_rtp, uint8_t* p_frame, uint32_t i_size, uint32_t i_type, uint64_t i_stamp, uint32_t i_flag)
 {
-
 	//printf("add frame, i_type = %d, i_stamp = %u\n", i_type, i_stamp);
-	if (p_rtp->i_buf_num > 10)
-	{
+	if(p_rtp->i_buf_num > 10) {
 		printf("rtp frame buf overlow, notice this\n");
-	}
-	else
-	{
+	}else {
 		pthread_mutex_lock(&p_rtp->mutex);
 
 		//printf("line = %d p_rtp->i_buf_num = %d\n",__LINE__,p_rtp->i_buf_num);
-		if (p_rtp->p_frame_buf == NULL)
-		{
+		if(p_rtp->p_frame_buf == NULL) {
 			p_rtp->p_frame_buf = new_frame(p_frame, i_size, i_type, i_stamp);
 			p_rtp->p_frame_header = p_rtp->p_frame_buf;
 			p_rtp->p_frame_buf->i_flag = i_flag;
-		}
-		else
-		{
+		}else {
 			frame_t* p_new = new_frame(p_frame, i_size, i_type, i_stamp);
 			p_new->i_flag = i_flag;
 			p_rtp->p_frame_buf->p_next = p_new;
 			p_rtp->p_frame_buf = p_new;
 
 			printf("%x, header = %x\n", p_rtp->p_frame_buf, p_rtp->p_frame_header);
-
 		}
-		if ((p_rtp->p_frame_buf->p_frame[3]&0x1F) != 1)
-		{
+		if ((p_rtp->p_frame_buf->p_frame[3]&0x1F) != 1) {
 			//printf("%x, %d\n", p_rtp->p_frame_buf->p_frame[3], i_size);
 		}
 
@@ -701,20 +674,14 @@ static frame_t* new_frame(uint8_t* p_frame_data, uint32_t i_size, uint32_t i_typ
 {
 	int i_ret = 0;
 	frame_t* p_new = NULL;
-	if (p_frame_data == NULL || i_size <= 0)
-	{
+	if (p_frame_data==NULL || i_size<=0) {
 		i_ret = -1;
-	}
-	else
-	{
+	}else {
 		p_new = malloc(i_size + sizeof (frame_t));
-		if (p_new == NULL)
-		{
+		if(p_new == NULL) {
 			printf("malloc rtp frame error\n");
 			i_ret = -1;
-		}
-		else
-		{
+		}else {
 			p_new->p_frame = ((uint8_t*) p_new) + sizeof (frame_t);
 
 			p_new->i_frame_size = i_size;
@@ -725,12 +692,9 @@ static frame_t* new_frame(uint8_t* p_frame_data, uint32_t i_size, uint32_t i_typ
 		}
 	}
 
-	if (i_ret < 0)
-	{
+	if (i_ret < 0) {
 		return NULL;
-	}
-	else
-	{
+	}else {
 		return p_new;
 	}
 }
@@ -900,7 +864,8 @@ static struct decoder *decoder_open(int argc, char **argv, struct decoder *decod
 	return decoder;
 
 fail:
-	if(inloop) inloop = 1; /*Error case: delete everything*/
+	if(inloop)
+		inloop = 1; /*Error case: delete everything*/
 	if(decoder)
 		decoder_close(decoder);
 	return NULL;
@@ -954,7 +919,8 @@ static struct information *information_init(int i)
 
 int main(int argc, char **argv)
 {
-	int i, first=0, ndecoders=0;
+	int i, first=0;
+	int ndecoders=0;
 
 	struct informations *information[4] = {};
 
@@ -963,12 +929,11 @@ int main(int argc, char **argv)
 
 	MSG("line=%d, argc=%d.\n", __LINE__, argc);
 
-	ndecoders = 4;
-	for(i=0; i<ndecoders; i++) {
+	for(i=0; i<NDECODERS; i++) {
 		//printf("%d \n", __LINE__);
-		information[i] = information_init(i);
+		information[i] = information_init(i);				//初始化rtp和锁
 		
-		decoder_open(argc, &argv[first], &(information[i]->decoders));
+		decoder_open(argc, &argv[first], &(information[i]->decoders));	//打开解码器
 		threadCreate(video_recv_thread, information[i]);	// read rtp
 		threadCreate(decode_stream, information[i]);		//decoders
 	}
